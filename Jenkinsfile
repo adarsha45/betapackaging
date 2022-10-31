@@ -35,70 +35,70 @@ node{
             }
         }
 
-        stage('Build the Source Code'){
-            dir ('build/antscripts') {
-                sh("ant -f project.build.xml -D'dep.sf.username=${PACKAGING_ORG_USERNAME}' initializeproperties packageresource");
-            }
-        }
+        // stage('Build the Source Code'){
+        //     dir ('build/antscripts') {
+        //         sh("ant -f project.build.xml -D'dep.sf.username=${PACKAGING_ORG_USERNAME}' initializeproperties packageresource");
+        //     }
+        // }
 
-        stage('Create Delta Package'){
-            def response = sh(returnStdout: true, script: "sfdx cq:delta:pull -u ${PACKAGING_ORG_USERNAME} --json");
-            def jsonResponse = readJSON text: response
-            previousCommitId = '';
-            if(jsonResponse.result.status == 0 && jsonResponse.result.sourceTrackingId != ''){
-                previousCommitId = jsonResponse.result.sourceTrackingId;
-                echo "Creating Delta from : ${previousCommitId}"
-                project = readJSON file: 'sfdx-project.json';
-                SOURCE_API_NAME = project.sourceApiVersion;
-                sh "rm -rf delta"
-                sh "mkdir -p delta"
-                sh "sfdx sgd:source:delta -f ${previousCommitId} -o ./delta -s ./src --api-version ${SOURCE_API_NAME} -n 'package-include-files'"
-                sh "mkdir -p delta/fullSource";
-                sh "mv build/antscripts/bin/src delta/fullSource"
-                sh "sfdx force:project:create -d delta --projectname . --defaultpackagedir fullSource --template empty"
-                dir('delta'){
-                    def deltaProject = readJSON file: 'sfdx-project.json';
-                    deltaProject.sourceApiVersion = SOURCE_API_NAME;
-                    writeJSON file: 'sfdx-project.json', json: deltaProject, pretty: 4
-                    sh "sfdx force:source:convert -x package/package.xml -d metadata"
-                }
-            }else{
-                error("Could not find last build history in org to continue delta deployment");
-            }
-        }
+        // stage('Create Delta Package'){
+        //     def response = sh(returnStdout: true, script: "sfdx cq:delta:pull -u ${PACKAGING_ORG_USERNAME} --json");
+        //     def jsonResponse = readJSON text: response
+        //     previousCommitId = '';
+        //     if(jsonResponse.result.status == 0 && jsonResponse.result.sourceTrackingId != ''){
+        //         previousCommitId = jsonResponse.result.sourceTrackingId;
+        //         echo "Creating Delta from : ${previousCommitId}"
+        //         project = readJSON file: 'sfdx-project.json';
+        //         SOURCE_API_NAME = project.sourceApiVersion;
+        //         sh "rm -rf delta"
+        //         sh "mkdir -p delta"
+        //         sh "sfdx sgd:source:delta -f ${previousCommitId} -o ./delta -s ./src --api-version ${SOURCE_API_NAME} -n 'package-include-files'"
+        //         sh "mkdir -p delta/fullSource";
+        //         sh "mv build/antscripts/bin/src delta/fullSource"
+        //         sh "sfdx force:project:create -d delta --projectname . --defaultpackagedir fullSource --template empty"
+        //         dir('delta'){
+        //             def deltaProject = readJSON file: 'sfdx-project.json';
+        //             deltaProject.sourceApiVersion = SOURCE_API_NAME;
+        //             writeJSON file: 'sfdx-project.json', json: deltaProject, pretty: 4
+        //             sh "sfdx force:source:convert -x package/package.xml -d metadata"
+        //         }
+        //     }else{
+        //         error("Could not find last build history in org to continue delta deployment");
+        //     }
+        // }
         
-        stage('Update Package Information'){
-            sh """
-            cat > package.xml <<EOF
-            `sed -n "/<?xml/,/<\\/postInstallClass>/p" src/package.xml`
-            `sed -n "/<types>/,/<\\/Package>/p" delta/metadata/package.xml`
-            EOF
-            """.stripIndent();
-            sh "mv package.xml delta/metadata/package.xml"
-            zip zipFile: 'src.zip', archive: true, dir: 'delta/metadata', overwrite: true
-            zip zipFile: 'destructiveChanges.zip', archive: true, dir: 'delta/destructiveChanges', overwrite: true
-        }
+        // stage('Update Package Information'){
+        //     sh """
+        //     cat > package.xml <<EOF
+        //     `sed -n "/<?xml/,/<\\/postInstallClass>/p" src/package.xml`
+        //     `sed -n "/<types>/,/<\\/Package>/p" delta/metadata/package.xml`
+        //     EOF
+        //     """.stripIndent();
+        //     sh "mv package.xml delta/metadata/package.xml"
+        //     zip zipFile: 'src.zip', archive: true, dir: 'delta/metadata', overwrite: true
+        //     zip zipFile: 'destructiveChanges.zip', archive: true, dir: 'delta/destructiveChanges', overwrite: true
+        // }
         
-        stage('Deploy Delta Package'){
-            echo "Starting Delta Deployment..."
-            sh "sfdx force:mdapi:deploy -w 200 -d delta/metadata -u ${PACKAGING_ORG_USERNAME}";
+        // stage('Deploy Delta Package'){
+        //     echo "Starting Delta Deployment..."
+        //     sh "sfdx force:mdapi:deploy -w 200 -d delta/metadata -u ${PACKAGING_ORG_USERNAME}";
 
-            try{
-                sh "sfdx force:mdapi:deploy -w 200 -d delta/destructiveChanges -u ${PACKAGING_ORG_USERNAME}";
-            }catch(Exception ex){
-                echo "Failed to deploy destructive package";
-            }
-            sh "sfdx cq:delta:push -u ${PACKAGING_ORG_USERNAME}";
-        }
+        //     try{
+        //         sh "sfdx force:mdapi:deploy -w 200 -d delta/destructiveChanges -u ${PACKAGING_ORG_USERNAME}";
+        //     }catch(Exception ex){
+        //         echo "Failed to deploy destructive package";
+        //     }
+        //     sh "sfdx cq:delta:push -u ${PACKAGING_ORG_USERNAME}";
+        // }
         
-        stage('Upload CQ Package'){
-            echo "Starting Package Upload..."
-            def cqPackageId = project.packageAliases[PACKAGE_NAME];
-            def packageInfo = project.packageDirectories.find {element -> element.package == PACKAGE_NAME}
-            sh "sfdx force:package1:version:create --wait 600 -u ${PACKAGING_ORG_USERNAME} --packageid ${cqPackageId} --name '${packageInfo.versionName}' --version ${packageInfo.versionNumber}";
-        }
+        // stage('Upload CQ Package'){
+        //     echo "Starting Package Upload..."
+        //     def cqPackageId = project.packageAliases[PACKAGE_NAME];
+        //     def packageInfo = project.packageDirectories.find {element -> element.package == PACKAGE_NAME}
+        //     sh "sfdx force:package1:version:create --wait 600 -u ${PACKAGING_ORG_USERNAME} --packageid ${cqPackageId} --name '${packageInfo.versionName}' --version ${packageInfo.versionNumber}";
+        // }
 
-        bitbucketStatusNotify(buildState: 'SUCCESSFUL');
+        // bitbucketStatusNotify(buildState: 'SUCCESSFUL');
     }catch(Exception ex){
         // Since we are using try..catch block have to fail the build manually
         currentBuild.result = "FAILED";
